@@ -1,4 +1,3 @@
-
 <?php
 // This file is part of Moodle - https://moodle.org/
 //
@@ -15,114 +14,187 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace paygw_shakeout;
+
 /**
- * Shake-Out API helper
+ * Helper class for Shake-Out API integration.
  *
  * @package     paygw_shakeout
  * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-namespace paygw_shakeout;
-
-use context_system;
-use core_payment\helper;
-use stdClass;
-
 class shakeout_helper {
-    
-    /**
-     * @var string Shake-Out API endpoint
-     */
-    const API_ENDPOINT = 'https://dash.shake-out.com/api/public/vendor/invoice';
+
+    /** @var string API base URL for production */
+    const API_BASE_URL = 'https://api.shake-out.com/api/v1/';
+
+    /** @var string API base URL for sandbox */
+    const API_SANDBOX_URL = 'https://sandbox-api.shake-out.com/api/v1/';
 
     /**
-     * Create an invoice with Shake-Out
+     * Create an invoice using Shake-Out API
      *
-     * @param string $apikey
-     * @param array $invoicedata
-     * @return array
+     * @param string $apikey API key for authentication
+     * @param array $invoicedata Invoice data
+     * @param bool $sandbox Whether to use sandbox environment
+     * @return array API response
+     * @throws \moodle_exception
      */
-    public static function create_invoice($apikey, $invoicedata) {
-        $curl = new \curl();
-        
-        $headers = [
-            'Content-Type: application/json',
-            'Authorization: apikey ' . $apikey
-        ];
-        
-        $curl->setopt([
-            CURLOPT_HTTPHEADER => $headers,
+    public static function create_invoice(string $apikey, array $invoicedata, bool $sandbox = false): array {
+        global $CFG;
+
+        $baseurl = $sandbox ? self::API_SANDBOX_URL : self::API_BASE_URL;
+        $url = $baseurl . 'invoices';
+
+        // Add webhook URL to invoice data
+        $invoicedata['webhook_url'] = $CFG->wwwroot . '/payment/gateway/shakeout/callback.php';
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($invoicedata),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apikey,
+                'Accept: application/json',
+            ],
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => !$sandbox, // Disable SSL verification in sandbox
         ]);
 
-        $response = $curl->post(self::API_ENDPOINT);
-        $httpcode = $curl->info['http_code'];
-        
-        if ($httpcode !== 200) {
-            throw new \moodle_exception('apierror', 'paygw_shakeout', '', null, 
-                'HTTP Error: ' . $httpcode . ' - ' . $response);
+        $response = curl_exec($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            throw new \moodle_exception('curlerror', 'paygw_shakeout', '', null, $error);
         }
 
-        $data = json_decode($response, true);
-        
+        $decoded = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \moodle_exception('invalidjsonresponse', 'paygw_shakeout');
+            throw new \moodle_exception('invalidjson', 'paygw_shakeout', '', null, $response);
         }
 
-        return $data;
+        if ($httpcode >= 400) {
+            $errormsg = isset($decoded['message']) ? $decoded['message'] : 'HTTP Error ' . $httpcode;
+            throw new \moodle_exception('apierror', 'paygw_shakeout', '', null, $errormsg);
+        }
+
+        return $decoded;
     }
 
     /**
-     * Verify webhook signature
+     * Verify webhook signature from Shake-Out
      *
-     * @param array $data Webhook data
+     * @param array $data Webhook payload data
      * @param string $signature Received signature
-     * @param string $secretkey Secret key
-     * @return bool
+     * @param string $secretkey Secret key for verification
+     * @return bool True if signature is valid
      */
-    public static function verify_signature($data, $signature, $secretkey) {
-        $calculatedSignature = hash('sha256', 
-            $data['data']['invoice_id'] . 
-            $data['data']['amount'] . 
-            $data['data']['invoice_status'] . 
-            $data['data']['updated_at'] . 
-            $secretkey
-        );
+    public static function verify_signature(array $data, string $signature, string $secretkey): bool {
+        // Remove signature from data before verification
+        unset($data['signature']);
         
-        return hash_equals($calculatedSignature, $signature);
+        // Sort data by keys for consistent signature generation
+        ksort($data);
+        
+        // Create signature string
+        $signaturestring = '';
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $signaturestring .= $key . '=' . json_encode($value) . '&';
+            } else {
+                $signaturestring .= $key . '=' . $value . '&';
+            }
+        }
+        $signaturestring = rtrim($signaturestring, '&');
+        
+        // Generate expected signature
+        $expectedsignature = hash_hmac('sha256', $signaturestring, $secretkey);
+        
+        return hash_equals($expectedsignature, $signature);
     }
 
     /**
-     * Get payment details for order processing
+     * Get invoice status from Shake-Out API
      *
-     * @param string $component
-     * @param string $paymentarea
-     * @param int $itemid
-     * @param string $userid
-     * @return stdClass
+     * @param string $apikey API key for authentication
+     * @param string $invoiceid Invoice ID
+     * @param bool $sandbox Whether to use sandbox environment
+     * @return array API response
+     * @throws \moodle_exception
      */
-    public static function get_payment_details($component, $paymentarea, $itemid, $userid) {
-        global $DB, $USER;
-        
-        $payable = helper::get_payable($component, $paymentarea, $itemid);
-        $surcharge = helper::get_gateway_surcharge('shakeout');
-        $cost = helper::get_rounded_cost($payable->get_amount(), $payable->get_currency(), $surcharge);
+    public static function get_invoice_status(string $apikey, string $invoiceid, bool $sandbox = false): array {
+        $baseurl = $sandbox ? self::API_SANDBOX_URL : self::API_BASE_URL;
+        $url = $baseurl . 'invoices/' . $invoiceid;
 
-        $user = $DB->get_record('user', ['id' => $userid]);
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $apikey,
+                'Accept: application/json',
+            ],
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => !$sandbox,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            throw new \moodle_exception('curlerror', 'paygw_shakeout', '', null, $error);
+        }
+
+        $decoded = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \moodle_exception('invalidjson', 'paygw_shakeout', '', null, $response);
+        }
+
+        if ($httpcode >= 400) {
+            $errormsg = isset($decoded['message']) ? $decoded['message'] : 'HTTP Error ' . $httpcode;
+            throw new \moodle_exception('apierror', 'paygw_shakeout', '', null, $errormsg);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Format amount for display
+     *
+     * @param float $amount Amount
+     * @param string $currency Currency code
+     * @return string Formatted amount
+     */
+    public static function format_amount(float $amount, string $currency): string {
+        $formatter = new \NumberFormatter('en_US', \NumberFormatter::CURRENCY);
+        return $formatter->formatCurrency($amount, $currency);
+    }
+
+    /**
+     * Log payment activity
+     *
+     * @param string $level Log level (info, warning, error)
+     * @param string $message Log message
+     * @param array $context Additional context data
+     */
+    public static function log_payment_activity(string $level, string $message, array $context = []): void {
+        global $CFG;
         
-        $details = new stdClass();
-        $details->amount = $cost;
-        $details->currency = $payable->get_currency();
-        $details->description = $payable->get_description();
-        $details->user = $user;
-        $details->component = $component;
-        $details->paymentarea = $paymentarea;
-        $details->itemid = $itemid;
-        
-        return $details;
+        if (!empty($CFG->debugdeveloper)) {
+            $logmessage = "Shake-Out Payment: [{$level}] {$message}";
+            if (!empty($context)) {
+                $logmessage .= " Context: " . json_encode($context);
+            }
+            error_log($logmessage);
+        }
     }
 }

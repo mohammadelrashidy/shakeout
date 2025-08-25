@@ -1,0 +1,100 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template paygw_shakeout/shakeout_button
+
+    Shake-Out payment button template.
+
+    Context variables required for this template:
+    * component - The component making the payment
+    * paymentarea - The payment area
+    * itemid - The item ID
+    * description - Payment description
+
+    Example context (json):
+    {
+        "component": "enrol_fee",
+        "paymentarea": "fee",
+        "itemid": 123,
+        "description": "Course enrollment fee"
+    }
+}}
+<div class="paygw-shakeout-container">
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="me-2">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h5 class="card-title mb-0">{{#str}}paywitshakeout, paygw_shakeout{{/str}}</h5>
+            </div>
+            
+            <p class="card-text">
+                {{description}}
+            </p>
+            
+            <div class="payment-info mb-3">
+                <small class="text-muted">
+                    {{#str}}paymentpending, paygw_shakeout{{/str}}
+                </small>
+            </div>
+            
+            <button type="button" 
+                    class="btn btn-primary btn-lg w-100" 
+                    data-action="pay-shakeout"
+                    data-component="{{component}}"
+                    data-paymentarea="{{paymentarea}}"
+                    data-itemid="{{itemid}}"
+                    data-description="{{description}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="me-2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <line x1="1" y1="10" x2="23" y2="10" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                {{#str}}paybutton, paygw_shakeout{{/str}}
+            </button>
+        </div>
+    </div>
+</div>
+
+{{#js}}
+require(['paygw_shakeout/gateways_modal'], function(modal) {
+    document.querySelector('[data-action="pay-shakeout"]').addEventListener('click', function(e) {
+        e.preventDefault();
+        var button = e.target;
+        var component = button.dataset.component;
+        var paymentarea = button.dataset.paymentarea;
+        var itemid = parseInt(button.dataset.itemid);
+        var description = button.dataset.description;
+        
+        // Disable button and show loading state
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>{{#str}}processing, paygw_shakeout{{/str}}';
+        
+        // Build payment URL and redirect
+        var params = new URLSearchParams({
+            component: component,
+            paymentarea: paymentarea,
+            itemid: itemid,
+            description: description
+        });
+        
+        window.location.href = M.cfg.wwwroot + '/payment/gateway/shakeout/pay.php?' + params.toString();
+    });
+});
+{{/js}}
