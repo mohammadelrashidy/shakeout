@@ -25,4 +25,33 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'shake-out.';
+$string['pluginname'] = 'Shake-Out Payment Gateway';
+$string['pluginname_desc'] = 'The Shake-Out plugin allows you to receive payments via Shake-Out payment gateway.';
+$string['gatewayname'] = 'Shake-Out';
+$string['gatewaydescription'] = 'Accept payments via FawryPay, Meeza, E-wallets, and Credit/Debit Cards through Shake-Out';
+
+// Configuration
+$string['apikey'] = 'API Key';
+$string['apikey_help'] = 'Get this from your Shake-Out dashboard at https://dash.shake-out.com/integrations';
+$string['secretkey'] = 'Secret Key'; 
+$string['secretkey_help'] = 'Get this from your Shake-Out dashboard at https://dash.shake-out.com/integrations';
+$string['successurl'] = 'Success URL';
+$string['successurl_help'] = 'URL to redirect users after successful payment';
+$string['failureurl'] = 'Failure URL';
+$string['failureurl_help'] = 'URL to redirect users after failed payment';
+$string['pendingurl'] = 'Pending URL';
+$string['pendingurl_help'] = 'URL to redirect users when payment is pending';
+
+// Errors
+$string['gatewaycannotbeenabled'] = 'The payment gateway cannot be enabled because the configuration is incomplete.';
+$string['internalerror'] = 'An internal error occurred';
+$string['unknownerror'] = 'Unknown error occurred';
+$string['paymentfailed'] = 'Payment failed: {$a}';
+$string['invalidjsonresponse'] = 'Invalid JSON response from Shake-Out API';
+$string['apierror'] = 'API Error: {$a}';
+
+// Payment
+$string['paymentmethod'] = 'Shake-Out Payment';
+$string['paymentmethoddescription'] = 'Pay with FawryPay, Meeza, E-wallets, or Credit/Debit Cards';
+$string['redirecting'] = 'Redirecting to Shake-Out payment page...';
+$string['proceedtopayment'] = 'Proceed to Payment';

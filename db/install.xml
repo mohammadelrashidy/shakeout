@@ -1,0 +1,28 @@
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="payment/gateway/shakeout/db" VERSION="20250825" COMMENT="XMLDB file for Moodle payment/gateway/shakeout"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="paygw_shakeout" COMMENT="Shake-Out payment gateway transactions">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="paymentid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Payment ID from payments table"/>
+        <FIELD NAME="invoice_id" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Shake-Out invoice ID"/>
+        <FIELD NAME="invoice_ref" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Shake-Out invoice reference"/>
+        <FIELD NAME="invoice_url" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Shake-Out payment URL"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="50" NOTNULL="false" DEFAULT="pending" SEQUENCE="false" COMMENT="Payment status"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="paymentid" TYPE="foreign" FIELDS="paymentid" REFTABLE="payments" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="invoice_id" UNIQUE="true" FIELDS="invoice_id"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
