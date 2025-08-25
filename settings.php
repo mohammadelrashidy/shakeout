@@ -15,17 +15,17 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other meta-data are defined here.
+ * Plugin administration pages are defined here.
  *
  * @package     paygw_shakeout
+ * @category    admin
  * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'paygw_shakeout';
-$plugin->release = '1.0.0';
-$plugin->version = 2025082500;
-$plugin->requires = 2022112800; // Moodle 4.1
-$plugin->maturity = MATURITY_STABLE;
+if ($ADMIN->fulltree) {
+    // No settings page needed for payment gateway plugins.
+    // Configuration is handled through the payment accounts interface.
+}

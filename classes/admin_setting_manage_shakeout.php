@@ -14,18 +14,42 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+namespace paygw_shakeout;
+
+use core_payment\admin_setting_manage_payment_gateways;
+
 /**
- * Plugin version and other meta-data are defined here.
+ * Admin setting to manage Shake-Out payment gateway.
  *
  * @package     paygw_shakeout
  * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
  * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+class admin_setting_manage_shakeout extends admin_setting_manage_payment_gateways {
 
-defined('MOODLE_INTERNAL') || die();
+    /**
+     * Constructor
+     */
+    public function __construct() {
+        $this->plugin_name = 'paygw_shakeout';
+        parent::__construct();
+    }
 
-$plugin->component = 'paygw_shakeout';
-$plugin->release = '1.0.0';
-$plugin->version = 2025082500;
-$plugin->requires = 2022112800; // Moodle 4.1
-$plugin->maturity = MATURITY_STABLE;
+    /**
+     * Return the gateway name for display
+     *
+     * @return string
+     */
+    protected function get_gateway_name(): string {
+        return get_string('gatewayname', 'paygw_shakeout');
+    }
+
+    /**
+     * Return description of the gateway
+     *
+     * @return string
+     */
+    protected function get_gateway_description(): string {
+        return get_string('gatewaydescription', 'paygw_shakeout');
+    }
+}
