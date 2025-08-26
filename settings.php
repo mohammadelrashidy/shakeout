@@ -17,15 +17,23 @@
 /**
  * Plugin administration pages are defined here.
  *
- * @package     paygw_shakeout
- * @category    admin
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
-    // No settings page needed for payment gateway plugins.
-    // Configuration is handled through the payment accounts interface.
+    // Add global settings for the plugin if needed
+    $settings->add(new admin_setting_heading('paygw_shakeout/general',
+        get_string('pluginname', 'paygw_shakeout'),
+        get_string('pluginname_desc', 'paygw_shakeout')
+    ));
+
+    $settings->add(new admin_setting_configcheckbox('paygw_shakeout/debug',
+        get_string('debugmode', 'paygw_shakeout'),
+        get_string('debugmode_desc', 'paygw_shakeout'),
+        0
+    ));
 }

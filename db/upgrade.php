@@ -17,10 +17,9 @@
 /**
  * Plugin upgrade steps are defined here.
  *
- * @package     paygw_shakeout
- * @category    upgrade
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
@@ -36,10 +35,9 @@ function xmldb_paygw_shakeout_upgrade($oldversion) {
 
     $dbman = $DB->get_manager();
 
-    if ($oldversion < 2025082500) {
-        // Shake-Out payment gateway plugin first release.
-        // No upgrade steps required for initial version.
-        upgrade_plugin_savepoint(true, 2025082500, 'paygw', 'shakeout');
+    if ($oldversion < 2025082501) {
+        // Add any future upgrade steps here if needed
+        upgrade_plugin_savepoint(true, 2025082501, 'paygw', 'shakeout');
     }
 
     return true;

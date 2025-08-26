@@ -17,9 +17,9 @@
 /**
  * Shake-Out webhook callback
  *
- * @package     paygw_shakeout
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../../config.php');
@@ -57,72 +57,74 @@ try {
 
     // Get payment record by invoice ID.
     $shakeoutrecord = $DB->get_record('paygw_shakeout', ['invoice_id' => $data['data']['invoice_id']]);
-    
     if (!$shakeoutrecord) {
-        shakeout_helper::log_payment_activity('error', 'Payment not found for invoice', ['invoice_id' => $data['data']['invoice_id']]);
+        shakeout_helper::log_payment_activity('error', 'Payment not found for invoice', 
+                                            ['invoice_id' => $data['data']['invoice_id']]);
         http_response_code(404);
         echo 'Payment not found';
         exit;
     }
 
     $paymentrecord = $DB->get_record('payments', ['id' => $shakeoutrecord->paymentid]);
-    
     if (!$paymentrecord) {
-        shakeout_helper::log_payment_activity('error', 'Payment record not found', ['payment_id' => $shakeoutrecord->paymentid]);
+        shakeout_helper::log_payment_activity('error', 'Payment record not found', 
+                                            ['payment_id' => $shakeoutrecord->paymentid]);
         http_response_code(404);
         echo 'Payment record not found';
         exit;
     }
 
-    // Get gateway config for signature verification.
-    $config = (object) \core_payment\helper::get_gateway_configuration(
+    // Get gateway configuration for signature verification.
+    $config = (object) helper::get_gateway_configuration(
         $paymentrecord->component,
         $paymentrecord->paymentarea,
         $paymentrecord->itemid,
         'shakeout'
     );
 
-    // Verify signature if secret key is configured.
+    // Verify webhook signature if secret key is available.
     if (!empty($config->secretkey) && isset($data['signature'])) {
-        if (!shakeout_helper::verify_signature($data, $data['signature'], $config->secretkey)) {
-            shakeout_helper::log_payment_activity('error', 'Invalid signature in webhook', [
-                'received_signature' => $data['signature'],
-                'invoice_id' => $data['data']['invoice_id']
+        $isvalidsignature = shakeout_helper::verify_signature($data, $data['signature'], $config->secretkey);
+        if (!$isvalidsignature) {
+            shakeout_helper::log_payment_activity('error', 'Invalid webhook signature', [
+                'invoice_id' => $data['data']['invoice_id'],
+                'received_signature' => $data['signature']
             ]);
-            http_response_code(400);
+            http_response_code(401);
             echo 'Invalid signature';
             exit;
         }
-        shakeout_helper::log_payment_activity('info', 'Webhook signature verified successfully');
     }
 
-    // Process payment status.
-    $invoicestatus = $data['data']['invoice_status'] ?? '';
-    $currentstatus = $shakeoutrecord->status ?? 'pending';
+    // Process the webhook based on payment status.
+    $newstatus = strtolower($data['data']['status'] ?? 'unknown');
+    $oldstatus = $shakeoutrecord->status;
 
-    shakeout_helper::log_payment_activity('info', 'Processing payment status update', [
+    // Update Shake-Out record.
+    $updatedata = [
+        'id' => $shakeoutrecord->id,
+        'status' => $newstatus,
+        'timemodified' => time()
+    ];
+
+    $DB->update_record('paygw_shakeout', $updatedata);
+
+    // Log status change.
+    shakeout_helper::log_payment_activity('info', 'Payment status updated', [
         'invoice_id' => $data['data']['invoice_id'],
-        'new_status' => $invoicestatus,
-        'current_status' => $currentstatus
+        'old_status' => $oldstatus,
+        'new_status' => $newstatus,
+        'payment_id' => $paymentrecord->id
     ]);
 
-    // Update payment status based on invoice status.
-    $updated = false;
-    
-    switch ($invoicestatus) {
+    // Handle different payment statuses.
+    switch ($newstatus) {
         case 'paid':
-            if ($currentstatus !== 'paid') {
-                // Update payment status.
-                $paymentrecord->success = 1;
-                $DB->update_record('payments', $paymentrecord);
-
-                // Update Shake-Out record.
-                $shakeoutrecord->status = 'paid';
-                $shakeoutrecord->timemodified = time();
-                $DB->update_record('paygw_shakeout', $shakeoutrecord);
-
-                // Deliver what was paid for.
-                \core_payment\helper::deliver_order(
+        case 'completed':
+        case 'success':
+            // Payment successful - deliver the product/service.
+            try {
+                helper::deliver_order(
                     $paymentrecord->component,
                     $paymentrecord->paymentarea,
                     $paymentrecord->itemid,
@@ -130,75 +132,76 @@ try {
                     $paymentrecord->userid
                 );
 
-                $updated = true;
-                shakeout_helper::log_payment_activity('info', 'Payment completed successfully', [
+                shakeout_helper::log_payment_activity('info', 'Payment delivered successfully', [
                     'payment_id' => $paymentrecord->id,
-                    'invoice_id' => $data['data']['invoice_id']
+                    'user_id' => $paymentrecord->userid
+                ]);
+
+                // Send success notification to user if email is available
+                if (!empty($USER->email)) {
+                    $subject = get_string('paymentsuccess_subject', 'paygw_shakeout');
+                    $message = get_string('paymentsuccess_message', 'paygw_shakeout', [
+                        'amount' => shakeout_helper::format_amount($paymentrecord->amount, $paymentrecord->currency),
+                        'invoice_id' => $data['data']['invoice_id']
+                    ]);
+                    
+                    // Use Moodle's email system
+                    $user = $DB->get_record('user', ['id' => $paymentrecord->userid]);
+                    if ($user) {
+                        email_to_user($user, get_admin(), $subject, $message);
+                    }
+                }
+
+            } catch (Exception $e) {
+                shakeout_helper::log_payment_activity('error', 'Failed to deliver payment', [
+                    'payment_id' => $paymentrecord->id,
+                    'exception' => $e->getMessage()
                 ]);
             }
             break;
 
-        case 'cancelled':
         case 'failed':
+        case 'cancelled':
         case 'expired':
-            if ($currentstatus !== $invoicestatus) {
-                // Update Shake-Out record.
-                $shakeoutrecord->status = $invoicestatus;
-                $shakeoutrecord->timemodified = time();
-                $DB->update_record('paygw_shakeout', $shakeoutrecord);
-
-                $updated = true;
-                shakeout_helper::log_payment_activity('info', 'Payment status updated', [
-                    'payment_id' => $paymentrecord->id,
-                    'invoice_id' => $data['data']['invoice_id'],
-                    'status' => $invoicestatus
-                ]);
-            }
+            // Payment failed - log for administrator review.
+            shakeout_helper::log_payment_activity('warning', 'Payment failed or cancelled', [
+                'payment_id' => $paymentrecord->id,
+                'status' => $newstatus,
+                'user_id' => $paymentrecord->userid
+            ]);
             break;
 
         case 'pending':
         case 'processing':
-            if ($currentstatus !== $invoicestatus) {
-                // Update Shake-Out record.
-                $shakeoutrecord->status = $invoicestatus;
-                $shakeoutrecord->timemodified = time();
-                $DB->update_record('paygw_shakeout', $shakeoutrecord);
-
-                $updated = true;
-                shakeout_helper::log_payment_activity('info', 'Payment status updated', [
-                    'payment_id' => $paymentrecord->id,
-                    'invoice_id' => $data['data']['invoice_id'],
-                    'status' => $invoicestatus
-                ]);
-            }
+            // Payment is still being processed - no action needed.
+            shakeout_helper::log_payment_activity('info', 'Payment still processing', [
+                'payment_id' => $paymentrecord->id,
+                'status' => $newstatus
+            ]);
             break;
 
         default:
+            // Unknown status - log for investigation.
             shakeout_helper::log_payment_activity('warning', 'Unknown payment status received', [
-                'status' => $invoicestatus,
-                'invoice_id' => $data['data']['invoice_id']
+                'payment_id' => $paymentrecord->id,
+                'status' => $newstatus,
+                'data' => $data
             ]);
             break;
     }
 
-    // Send success response.
+    // Respond with success.
     http_response_code(200);
     echo 'OK';
-    
-    if ($updated) {
-        shakeout_helper::log_payment_activity('info', 'Webhook processed successfully');
-    } else {
-        shakeout_helper::log_payment_activity('info', 'Webhook received but no updates needed');
-    }
 
 } catch (Exception $e) {
-    shakeout_helper::log_payment_activity('error', 'Webhook processing exception', [
+    // Log any exceptions.
+    shakeout_helper::log_payment_activity('error', 'Webhook processing failed', [
         'exception' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
-        'webhook_data' => $data ?? null
+        'data' => $data ?? null
     ]);
-    
+
     http_response_code(500);
-    echo 'Server error';
-    error_log('Shake-Out webhook error: ' . $e->getMessage());
+    echo 'Internal server error';
 }

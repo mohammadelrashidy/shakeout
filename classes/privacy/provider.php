@@ -24,76 +24,64 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 
 /**
- * Privacy subsystem implementation for paygw_shakeout.
+ * Privacy Subsystem implementation for paygw_shakeout.
  *
- * @package     paygw_shakeout
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class provider implements 
+class provider implements
     \core_privacy\local\metadata\provider,
-    \core_privacy\local\request\core_userlist_provider,
-    \core_privacy\local\request\plugin\provider {
+    \core_privacy\local\request\plugin\provider,
+    \core_privacy\local\request\core_userlist_provider {
 
     /**
-     * Return the fields which contain personal data.
+     * Returns meta data about this system.
      *
-     * @param collection $items a reference to the collection to use to store the metadata.
-     * @return collection the updated collection of metadata items.
+     * @param collection $collection The initialised collection to add items to.
+     * @return collection A listing of user data stored through this system.
      */
-    public static function get_metadata(collection $items): collection {
-        $items->add_database_table(
-            'paygw_shakeout',
-            [
-                'paymentid' => 'privacy:metadata:paygw_shakeout:paymentid',
-                'invoice_id' => 'privacy:metadata:paygw_shakeout:invoice_id',
-                'invoice_ref' => 'privacy:metadata:paygw_shakeout:invoice_ref',
-                'invoice_url' => 'privacy:metadata:paygw_shakeout:invoice_url',
-                'status' => 'privacy:metadata:paygw_shakeout:status',
-                'timecreated' => 'privacy:metadata:paygw_shakeout:timecreated',
-                'timemodified' => 'privacy:metadata:paygw_shakeout:timemodified',
-            ],
-            'privacy:metadata:paygw_shakeout'
-        );
+    public static function get_metadata(collection $collection): collection {
+        $collection->add_database_table('paygw_shakeout', [
+            'paymentid' => 'privacy:metadata:paygw_shakeout:paymentid',
+            'invoice_id' => 'privacy:metadata:paygw_shakeout:invoice_id',
+            'invoice_ref' => 'privacy:metadata:paygw_shakeout:invoice_ref',
+            'invoice_url' => 'privacy:metadata:paygw_shakeout:invoice_url',
+            'status' => 'privacy:metadata:paygw_shakeout:status',
+            'timecreated' => 'privacy:metadata:paygw_shakeout:timecreated',
+            'timemodified' => 'privacy:metadata:paygw_shakeout:timemodified',
+        ], 'privacy:metadata:paygw_shakeout');
 
-        $items->add_external_location_link(
-            'shakeout',
-            [
-                'first_name' => 'privacy:metadata:shakeout:first_name',
-                'last_name' => 'privacy:metadata:shakeout:last_name',
-                'email' => 'privacy:metadata:shakeout:email',
-                'phone' => 'privacy:metadata:shakeout:phone',
-                'address' => 'privacy:metadata:shakeout:address',
-                'amount' => 'privacy:metadata:shakeout:amount',
-                'currency' => 'privacy:metadata:shakeout:currency',
-            ],
-            'privacy:metadata:shakeout'
-        );
+        $collection->add_external_location_link('shakeout', [
+            'first_name' => 'privacy:metadata:shakeout:first_name',
+            'last_name' => 'privacy:metadata:shakeout:last_name',
+            'email' => 'privacy:metadata:shakeout:email',
+            'phone' => 'privacy:metadata:shakeout:phone',
+            'address' => 'privacy:metadata:shakeout:address',
+            'amount' => 'privacy:metadata:shakeout:amount',
+            'currency' => 'privacy:metadata:shakeout:currency',
+        ], 'privacy:metadata:shakeout');
 
-        return $items;
+        return $collection;
     }
 
     /**
      * Get the list of contexts that contain user information for the specified user.
      *
-     * @param int $userid the userid.
-     * @return contextlist the list of contexts containing user info for the user.
+     * @param int $userid The user to search.
+     * @return contextlist The contextlist containing the list of contexts used in this plugin.
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         $contextlist = new contextlist();
-        
+
         $sql = "SELECT DISTINCT ctx.id
                   FROM {paygw_shakeout} ps
-                  JOIN {payments} p ON p.id = ps.paymentid
-                  JOIN {context} ctx ON ctx.instanceid = p.userid AND ctx.contextlevel = :contextlevel
+                  JOIN {payments} p ON ps.paymentid = p.id
+                  JOIN {context} ctx ON p.accountid = ctx.id
                  WHERE p.userid = :userid";
 
-        $params = [
-            'userid' => $userid,
-            'contextlevel' => CONTEXT_USER,
-        ];
+        $contextlist->add_from_sql($sql, ['userid' => $userid]);
 
-        $contextlist->add_from_sql($sql, $params);
         return $contextlist;
     }
 
@@ -105,21 +93,18 @@ class provider implements
     public static function get_users_in_context(userlist $userlist) {
         $context = $userlist->get_context();
 
-        if ($context instanceof \context_user) {
-            $sql = "SELECT p.userid
-                      FROM {paygw_shakeout} ps
-                      JOIN {payments} p ON p.id = ps.paymentid
-                     WHERE p.userid = :userid";
+        $sql = "SELECT p.userid
+                  FROM {paygw_shakeout} ps
+                  JOIN {payments} p ON ps.paymentid = p.id
+                 WHERE p.accountid = :accountid";
 
-            $params = ['userid' => $context->instanceid];
-            $userlist->add_from_sql('userid', $sql, $params);
-        }
+        $userlist->add_from_sql('userid', $sql, ['accountid' => $context->id]);
     }
 
     /**
-     * Export personal data for the given approved_contextlist.
+     * Export all user data for the specified user, in the specified contexts.
      *
-     * @param approved_contextlist $contextlist a list of contexts approved for export.
+     * @param approved_contextlist $contextlist The approved contexts to export information for.
      */
     public static function export_user_data(approved_contextlist $contextlist) {
         global $DB;
@@ -129,63 +114,57 @@ class provider implements
         }
 
         $user = $contextlist->get_user();
+        $userid = $user->id;
 
-        foreach ($contextlist->get_contexts() as $context) {
-            if ($context instanceof \context_user && $context->instanceid == $user->id) {
-                $sql = "SELECT ps.*, p.component, p.paymentarea, p.itemid, p.amount, p.currency
-                          FROM {paygw_shakeout} ps
-                          JOIN {payments} p ON p.id = ps.paymentid
-                         WHERE p.userid = :userid";
+        list($contextsql, $contextparams) = $DB->get_in_or_equal($contextlist->get_contextids(), SQL_PARAMS_NAMED);
 
-                $params = ['userid' => $user->id];
-                $records = $DB->get_records_sql($sql, $params);
+        $sql = "SELECT ps.*, p.component, p.paymentarea, p.itemid, p.amount, p.currency
+                  FROM {paygw_shakeout} ps
+                  JOIN {payments} p ON ps.paymentid = p.id
+                 WHERE p.userid = :userid
+                   AND p.accountid {$contextsql}";
 
-                if (!empty($records)) {
-                    $data = [];
-                    foreach ($records as $record) {
-                        $data[] = [
-                            'invoice_id' => $record->invoice_id,
-                            'invoice_ref' => $record->invoice_ref,
-                            'status' => $record->status,
-                            'amount' => $record->amount,
-                            'currency' => $record->currency,
-                            'component' => $record->component,
-                            'paymentarea' => $record->paymentarea,
-                            'timecreated' => transform::datetime($record->timecreated),
-                            'timemodified' => $record->timemodified ? transform::datetime($record->timemodified) : null,
-                        ];
-                    }
+        $params = ['userid' => $userid] + $contextparams;
+        $records = $DB->get_records_sql($sql, $params);
 
-                    writer::with_context($context)->export_data(
-                        [get_string('pluginname', 'paygw_shakeout')],
-                        (object) $data
-                    );
-                }
-            }
+        foreach ($records as $record) {
+            $context = \context::instance_by_id($record->accountid);
+            $data = [
+                'invoice_id' => $record->invoice_id,
+                'invoice_ref' => $record->invoice_ref,
+                'status' => $record->status,
+                'amount' => $record->amount,
+                'currency' => $record->currency,
+                'timecreated' => transform::datetime($record->timecreated),
+                'timemodified' => $record->timemodified ? transform::datetime($record->timemodified) : null,
+            ];
+
+            writer::with_context($context)->export_data(
+                [get_string('pluginname', 'paygw_shakeout')], 
+                (object) $data
+            );
         }
     }
 
     /**
      * Delete all data for all users in the specified context.
      *
-     * @param \context $context the context to delete in.
+     * @param \context $context The specific context to delete data for.
      */
     public static function delete_data_for_all_users_in_context(\context $context) {
         global $DB;
 
-        if ($context instanceof \context_user) {
-            $sql = "DELETE FROM {paygw_shakeout} 
-                     WHERE paymentid IN (
-                        SELECT id FROM {payments} WHERE userid = :userid
-                     )";
-            $DB->execute($sql, ['userid' => $context->instanceid]);
-        }
+        $sql = "DELETE ps FROM {paygw_shakeout} ps
+                  JOIN {payments} p ON ps.paymentid = p.id
+                 WHERE p.accountid = :accountid";
+
+        $DB->execute($sql, ['accountid' => $context->id]);
     }
 
     /**
      * Delete all user data for the specified user, in the specified contexts.
      *
-     * @param approved_contextlist $contextlist a list of contexts approved for deletion.
+     * @param approved_contextlist $contextlist The approved contexts and user information to delete information for.
      */
     public static function delete_data_for_user(approved_contextlist $contextlist) {
         global $DB;
@@ -194,17 +173,16 @@ class provider implements
             return;
         }
 
-        $user = $contextlist->get_user();
+        $userid = $contextlist->get_user()->id;
+        list($contextsql, $contextparams) = $DB->get_in_or_equal($contextlist->get_contextids(), SQL_PARAMS_NAMED);
 
-        foreach ($contextlist->get_contexts() as $context) {
-            if ($context instanceof \context_user && $context->instanceid == $user->id) {
-                $sql = "DELETE FROM {paygw_shakeout} 
-                         WHERE paymentid IN (
-                            SELECT id FROM {payments} WHERE userid = :userid
-                         )";
-                $DB->execute($sql, ['userid' => $user->id]);
-            }
-        }
+        $sql = "DELETE ps FROM {paygw_shakeout} ps
+                  JOIN {payments} p ON ps.paymentid = p.id
+                 WHERE p.userid = :userid
+                   AND p.accountid {$contextsql}";
+
+        $params = ['userid' => $userid] + $contextparams;
+        $DB->execute($sql, $params);
     }
 
     /**
@@ -218,12 +196,18 @@ class provider implements
         $context = $userlist->get_context();
         $userids = $userlist->get_userids();
 
-        if ($context instanceof \context_user && in_array($context->instanceid, $userids)) {
-            $sql = "DELETE FROM {paygw_shakeout} 
-                     WHERE paymentid IN (
-                        SELECT id FROM {payments} WHERE userid = :userid
-                     )";
-            $DB->execute($sql, ['userid' => $context->instanceid]);
+        if (empty($userids)) {
+            return;
         }
+
+        list($usersql, $userparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+
+        $sql = "DELETE ps FROM {paygw_shakeout} ps
+                  JOIN {payments} p ON ps.paymentid = p.id
+                 WHERE p.accountid = :accountid
+                   AND p.userid {$usersql}";
+
+        $params = ['accountid' => $context->id] + $userparams;
+        $DB->execute($sql, $params);
     }
 }

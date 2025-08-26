@@ -17,9 +17,9 @@
 /**
  * Shake-Out payment processing
  *
- * @package     paygw_shakeout
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require_once(__DIR__ . '/../../../config.php');
@@ -35,14 +35,22 @@ $component = required_param('component', PARAM_ALPHANUMEXT);
 $paymentarea = required_param('paymentarea', PARAM_ALPHANUMEXT);
 $itemid = required_param('itemid', PARAM_INT);
 $description = required_param('description', PARAM_TEXT);
+$sesskey = optional_param('sesskey', '', PARAM_ALPHANUMEXT);
+
+// Validate CSRF token if provided
+if (!empty($sesskey) && !confirm_sesskey($sesskey)) {
+    throw new moodle_exception('invalidsesskey', 'error');
+}
 
 try {
     // Get payment configuration.
     $config = (object) helper::get_gateway_configuration($component, $paymentarea, $itemid, 'shakeout');
-    
-    // Validate required configuration.
-    if (empty($config->apikey)) {
-        throw new moodle_exception('gatewaycannotbeenabled', 'paygw_shakeout');
+
+    // Validate configuration
+    $validation = shakeout_helper::validate_configuration($config);
+    if (!$validation['success']) {
+        $errors = implode('<br>', $validation['errors']);
+        throw new moodle_exception('gatewaynotconfigured', 'paygw_shakeout', '', null, $errors);
     }
 
     // Get payable information.
@@ -63,7 +71,6 @@ try {
 
     // Prepare invoice data for Shake-Out API.
     $datetime = new DateTime('tomorrow');
-    
     $invoicedata = [
         'amount' => $cost,
         'currency' => $payable->get_currency(),
@@ -99,9 +106,13 @@ try {
 
     // Create invoice with Shake-Out.
     $sandbox = !empty($config->sandbox);
-    $response = shakeout_helper::create_invoice($config->apikey, $invoicedata, $sandbox);
+    $customapiurl = $sandbox ? 
+        (!empty($config->sandboxapibaseurl) ? $config->sandboxapibaseurl : '') :
+        (!empty($config->apibaseurl) ? $config->apibaseurl : '');
 
-    if ($response['status'] === 'success') {
+    $response = shakeout_helper::create_invoice($config->apikey, $invoicedata, $sandbox, $customapiurl);
+
+    if (isset($response['status']) && $response['status'] === 'success') {
         // Save payment record.
         $paymentrecord = helper::save_payment(
             helper::get_payable($component, $paymentarea, $itemid)->get_account_id(),
@@ -114,9 +125,12 @@ try {
             'shakeout'
         );
 
+        // Get payment ID (handle both object and integer returns)
+        $paymentid = is_object($paymentrecord) ? $paymentrecord->get_id() : $paymentrecord;
+        
         // Store Shake-Out specific data.
         $shakeoutdata = [
-            'paymentid' => $paymentrecord->get_id(),
+            'paymentid' => $paymentid,
             'invoice_id' => $response['data']['invoice_id'],
             'invoice_ref' => $response['data']['invoice_ref'] ?? '',
             'invoice_url' => $response['data']['url'],
@@ -128,7 +142,7 @@ try {
 
         // Log successful invoice creation.
         shakeout_helper::log_payment_activity('info', 'Invoice created successfully', [
-            'payment_id' => $paymentrecord->get_id(),
+            'payment_id' => $paymentid,
             'invoice_id' => $response['data']['invoice_id'],
             'invoice_url' => $response['data']['url']
         ]);
@@ -163,5 +177,25 @@ try {
         'trace' => $e->getTraceAsString()
     ]);
 
-    throw new moodle_exception('paymentfailed', 'paygw_shakeout', '', null, $e->getMessage());
+    // Display user-friendly error page
+    $PAGE->set_context(context_system::instance());
+    $PAGE->set_title(get_string('paymentfailed', 'paygw_shakeout'));
+    $PAGE->set_heading(get_string('paymentfailed', 'paygw_shakeout'));
+
+    echo $OUTPUT->header();
+    echo $OUTPUT->box_start('generalbox error');
+    echo html_writer::tag('h3', get_string('paymentfailed', 'paygw_shakeout'));
+    echo html_writer::tag('p', get_string('paymentprocessingerror', 'paygw_shakeout'));
+    
+    if (!empty($CFG->debugdeveloper)) {
+        echo html_writer::tag('details', 
+            html_writer::tag('summary', 'Debug Information') .
+            html_writer::tag('pre', $e->getMessage())
+        );
+    }
+    
+    echo html_writer::link($CFG->wwwroot, get_string('continue'), ['class' => 'btn btn-primary']);
+    echo $OUTPUT->box_end();
+    echo $OUTPUT->footer();
+    exit;
 }

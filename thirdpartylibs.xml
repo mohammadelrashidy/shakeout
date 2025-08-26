@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <libraries>
   <library>
-    <location>none</location>
-    <name>Shake-Out Payment Gateway API</name>
+    <location>amd/src</location>
+    <name>Shake-Out Payment Handler</name>
     <version>1.0</version>
-    <license>Commercial</license>
-    <licenseversion>1.0</licenseversion>
+    <license>GPL</license>
+    <licenseversion>3+</licenseversion>
   </library>
 </libraries>

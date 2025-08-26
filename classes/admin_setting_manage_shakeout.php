@@ -16,40 +16,71 @@
 
 namespace paygw_shakeout;
 
-use core_payment\admin_setting_manage_payment_gateways;
-
 /**
- * Admin setting to manage Shake-Out payment gateway.
+ * Admin settings management for Shake-Out gateway
  *
- * @package     paygw_shakeout
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class admin_setting_manage_shakeout extends admin_setting_manage_payment_gateways {
+class admin_setting_manage_shakeout extends \admin_setting {
 
     /**
      * Constructor
      */
     public function __construct() {
-        $this->plugin_name = 'paygw_shakeout';
-        parent::__construct();
+        $this->nosave = true;
+        parent::__construct('paygw_shakeout_manage', 
+                          get_string('manageshakeout', 'paygw_shakeout'), 
+                          get_string('manageshakeout_desc', 'paygw_shakeout'), 
+                          '');
     }
 
     /**
-     * Return the gateway name for display
+     * Always returns true, does nothing
      *
-     * @return string
+     * @return true
      */
-    protected function get_gateway_name(): string {
-        return get_string('gatewayname', 'paygw_shakeout');
+    public function get_setting() {
+        return true;
     }
 
     /**
-     * Return description of the gateway
+     * Always returns true, does nothing
      *
-     * @return string
+     * @param mixed $data
+     * @return true
      */
-    protected function get_gateway_description(): string {
-        return get_string('gatewaydescription', 'paygw_shakeout');
+    public function write_setting($data) {
+        return '';
+    }
+
+    /**
+     * Returns an XHTML string for the setting
+     *
+     * @param mixed $data
+     * @param string $query
+     * @return string Returns an XHTML string
+     */
+    public function output_html($data, $query = '') {
+        global $CFG, $OUTPUT;
+
+        $html = '';
+        $html .= '<div class="form-item">';
+        $html .= '<div class="form-label">';
+        $html .= '<label>' . $this->visiblename . '</label>';
+        $html .= '</div>';
+        $html .= '<div class="form-setting">';
+        $html .= '<div class="form-defaultinfo">' . $this->description . '</div>';
+        
+        // Add management links
+        $manageurl = new \moodle_url('/admin/settings.php', ['section' => 'paymentgateway_shakeout']);
+        $html .= '<p><a href="' . $manageurl . '" class="btn btn-secondary">' . 
+                 get_string('managegateways', 'core_payment') . '</a></p>';
+        
+        $html .= '</div>';
+        $html .= '</div>';
+
+        return $html;
     }
 }

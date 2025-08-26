@@ -1,0 +1,59 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template paygw_shakeout/payment_form
+
+    Shake-Out payment form template.
+
+    Context variables required for this template:
+    * paymenturl - URL for payment processing
+    * amount - Payment amount
+    * currency - Payment currency
+    * description - Payment description
+
+    Example context (json):
+    {
+        "paymenturl": "https://example.com/pay",
+        "amount": "25.00",
+        "currency": "USD",
+        "description": "Course enrollment"
+    }
+}}
+<div class="shakeout-payment-gateway">
+    <div class="card">
+        <div class="card-body text-center">
+            <h5 class="card-title">{{#str}}paywitshakeout, paygw_shakeout{{/str}}</h5>
+            <p class="card-text">{{#str}}gatewaydescription, paygw_shakeout{{/str}}</p>
+            
+            {{#amount}}
+            <p class="h6 text-muted">{{#str}}amount, core{{/str}}: {{amount}} {{currency}}</p>
+            {{/amount}}
+            
+            <button type="button" class="btn btn-primary btn-lg btn-shakeout-pay" id="shakeout-pay-btn">
+                <i class="fa fa-credit-card" aria-hidden="true"></i> 
+                {{#str}}paybutton, paygw_shakeout{{/str}}
+            </button>
+            
+            <div id="shakeout-loading" class="mt-3" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">{{#str}}processing, paygw_shakeout{{/str}}</span>
+                </div>
+                <p class="mt-2">{{#str}}processing, paygw_shakeout{{/str}}</p>
+            </div>
+        </div>
+    </div>
+</div>

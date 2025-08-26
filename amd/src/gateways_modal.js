@@ -14,104 +14,89 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Shake-Out payment gateway modal functionality.
+ * Shake-Out payment gateway modal handler
  *
  * @module     paygw_shakeout/gateways_modal
  * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define([
-    'core/str',
-    'core/templates',
-    'core/modal_factory',
-    'core/modal_events',
-    'core/notification'
-], function(Str, Templates, ModalFactory, ModalEvents, Notification) {
+define(['jquery', 'core/modal_factory', 'core/modal_events', 'core/str', 'core/ajax'], 
+function($, ModalFactory, ModalEvents, Str, Ajax) {
+    'use strict';
 
     /**
-     * Process the payment by redirecting to the payment page.
+     * Initialise the payment process for Shake-Out gateway
      *
-     * @param {string} component
-     * @param {string} paymentArea
-     * @param {number} itemId
-     * @param {string} description
+     * @param {String} component The component name
+     * @param {String} paymentArea The payment area
+     * @param {Number} itemId The item ID
+     * @param {String} description The payment description
+     * @returns {Promise}
      */
-    var processPayment = function(component, paymentArea, itemId, description) {
-        // Show processing notification.
-        Str.get_string('processing', 'paygw_shakeout').then(function(processingString) {
-            Notification.add({
-                message: processingString,
-                type: 'info'
+    var process = function(component, paymentArea, itemId, description) {
+        return new Promise(function(resolve, reject) {
+            var modalPromise = ModalFactory.create({
+                type: ModalFactory.types.DEFAULT,
+                title: Str.get_string('paymentconfirm', 'paygw_shakeout'),
+                body: Str.get_string('paymentconfirmdesc', 'paygw_shakeout')
             });
-            return null;
-        }).catch(function() {
-            // Fallback message if string loading fails.
-            Notification.add({
-                message: 'Processing payment...',
-                type: 'info'
+
+            modalPromise.then(function(modal) {
+                // Add custom footer with payment buttons
+                modal.setFooter(
+                    '<button type="button" class="btn btn-primary" data-action="pay">' +
+                    'Pay Now</button>' +
+                    '<button type="button" class="btn btn-secondary" data-action="cancel">' +
+                    'Cancel</button>'
+                );
+
+                // Handle pay button click
+                modal.getRoot().on('click', '[data-action="pay"]', function() {
+                    modal.hide();
+                    
+                    // Build payment URL
+                    var paymentUrl = M.cfg.wwwroot + '/payment/gateway/shakeout/pay.php';
+                    var params = new URLSearchParams({
+                        component: component,
+                        paymentarea: paymentArea,
+                        itemid: itemId,
+                        description: description,
+                        sesskey: M.cfg.sesskey
+                    });
+                    
+                    // Open payment gateway in new window/tab
+                    var paymentWindow = window.open(
+                        paymentUrl + '?' + params.toString(),
+                        'shakeout_payment',
+                        'width=800,height=600,scrollbars=yes,resizable=yes'
+                    );
+                    
+                    // Focus the payment window
+                    if (paymentWindow) {
+                        paymentWindow.focus();
+                    }
+                    
+                    resolve();
+                });
+
+                // Handle cancel button click
+                modal.getRoot().on('click', '[data-action="cancel"]', function() {
+                    modal.hide();
+                    reject(new Error('Payment cancelled by user'));
+                });
+
+                // Show the modal
+                modal.show();
+                return modal;
+            }).catch(function(error) {
+                console.error('Shake-Out: Error creating payment modal:', error);
+                reject(error);
             });
         });
-
-        // Build payment URL.
-        var paymentUrl = new URL(M.cfg.wwwroot + '/payment/gateway/shakeout/pay.php');
-        paymentUrl.searchParams.append('component', component);
-        paymentUrl.searchParams.append('paymentarea', paymentArea);
-        paymentUrl.searchParams.append('itemid', itemId);
-        paymentUrl.searchParams.append('description', description);
-
-        // Redirect to payment page.
-        window.location.href = paymentUrl.toString();
     };
 
     return {
-        /**
-         * Creates and shows the payment modal for Shake-Out gateway.
-         *
-         * @param {string} component
-         * @param {string} paymentArea
-         * @param {number} itemId
-         * @param {string} description
-         * @returns {Promise}
-         */
-        process: function(component, paymentArea, itemId, description) {
-            return ModalFactory.create({
-                type: ModalFactory.types.SAVE_CANCEL,
-                title: Str.get_string('paywitshakeout', 'paygw_shakeout'),
-                body: Templates.render('paygw_shakeout/shakeout_button', {
-                    component: component,
-                    paymentarea: paymentArea,
-                    itemid: itemId,
-                    description: description
-                })
-            }).then(function(modal) {
-                // Handle form submission.
-                modal.getRoot().on(ModalEvents.save, function() {
-                    processPayment(component, paymentArea, itemId, description);
-                });
-
-                modal.show();
-                return modal;
-            });
-        },
-
-        /**
-         * Initialise the payment process.
-         *
-         * @param {string} component
-         * @param {string} paymentArea
-         * @param {number} itemId
-         * @param {string} description
-         */
-        init: function(component, paymentArea, itemId, description) {
-            // Add click handler to pay button if it exists.
-            var payButton = document.querySelector('[data-action="pay-shakeout"]');
-            if (payButton) {
-                payButton.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    processPayment(component, paymentArea, itemId, description);
-                });
-            }
-        }
+        process: process
     };
 });

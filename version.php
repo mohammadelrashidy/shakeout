@@ -17,15 +17,15 @@
 /**
  * Plugin version and other meta-data are defined here.
  *
- * @package     paygw_shakeout
- * @copyright   2025 Mohammad Nabil <mohammad@smartlearn.education>
- * @license     https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package    paygw_shakeout
+ * @copyright  2025 Mohammad Nabil <mohammad@smartlearn.education>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'paygw_shakeout';
-$plugin->release = '1.0.0';
-$plugin->version = 2025082500;
-$plugin->requires = 2022112800; // Moodle 4.1
+$plugin->release = '1.2.1';
+$plugin->version = 2025082513; // Fixed DateTime namespace issue
+$plugin->requires = 2021051700; // Moodle 3.11 LTS (broader compatibility)
 $plugin->maturity = MATURITY_STABLE;
